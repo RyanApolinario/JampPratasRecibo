@@ -1,0 +1,16 @@
+{
+  "name": "jamp-pratas-backend",
+  "version": "1.0.0",
+  "description": "Backend para envio de recibos JAMP Pratas via email, protegendo segredos.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.19.0",
+    "nodemailer": "^6.9.8"
+  }
+}
