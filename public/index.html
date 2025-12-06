@@ -95,6 +95,28 @@
             transition: all 0.3s;
         }
 
+        .login-box .form-group input {
+            background: var(--white);
+            color: var(--dark);
+        }
+
+        /* Sistema principal: inputs/textarea/select escuros dentro dos cards */
+        .card .form-group input,
+        .card .form-group textarea,
+        .card .form-group select,
+        .search-box input {
+            background: var(--dark);
+            color: var(--white);
+            border-color: var(--border);
+        }
+
+        /* Placeholder mais suave no tema escuro */
+        .card .form-group input::placeholder,
+        .card .form-group textarea::placeholder,
+        .search-box input::placeholder {
+            color: #888;
+        }
+
         .form-group input:focus {
             outline: none;
             border-color: var(--gold);
@@ -234,6 +256,14 @@
         }
 
         .tab-content.active {
+            display: block;
+        }
+
+        #tab-usuarios {
+            display: none;
+        }
+
+        #tab-usuarios.active {
             display: block;
         }
 
@@ -1502,8 +1532,12 @@
         document.getElementById('userRole').style.display = 'inline';
         const usersTabButton = document.getElementById('usersTab');
         const usersTabContent = document.getElementById('tab-usuarios');
+
+        // Mostra apenas o botão da aba "Usuários"
         if (usersTabButton) usersTabButton.style.display = 'block';
-        if (usersTabContent) usersTabContent.style.display = 'block';
+
+        // Não força o conteúdo a aparecer; continua escondido até ganhar .active
+        if (usersTabContent) usersTabContent.classList.remove('active');
     }
 
     function switchTab(tabName, event) {
