@@ -21,7 +21,6 @@
             --light-gray: #f5f5f5;
             --white: #ffffff;
             --border: #e0e0e0;
-            --primary-color: #D4AF37;
         }
 
         body {
@@ -83,39 +82,17 @@
 
         .form-group label {
             font-weight: 600;
-            color: var(--primary-color);
+            color: #333;
             font-size: 0.9em;
         }
 
         .form-group input {
-            padding: 12px;
+            padding: 15px;
             border: 2px solid var(--border);
             border-radius: 8px;
             font-size: 1em;
             font-family: 'Poppins', sans-serif;
             transition: all 0.3s;
-        }
-
-        .login-box .form-group input {
-            background: var(--white);
-            color: var(--dark);
-        }
-
-        /* Sistema principal: inputs/textarea/select escuros dentro dos cards */
-        .card .form-group input,
-        .card .form-group textarea,
-        .card .form-group select,
-        .search-box input {
-            background: var(--dark);
-            color: var(--white);
-            border-color: var(--border);
-        }
-
-        /* Placeholder mais suave no tema escuro */
-        .card .form-group input::placeholder,
-        .card .form-group textarea::placeholder,
-        .search-box input::placeholder {
-            color: #888;
         }
 
         .form-group input:focus {
@@ -257,14 +234,6 @@
         }
 
         .tab-content.active {
-            display: block;
-        }
-
-        #tab-usuarios {
-            display: none;
-        }
-
-        #tab-usuarios.active {
             display: block;
         }
 
@@ -1355,1099 +1324,891 @@
     </script>
 
     <script>
-    // CONFIGURAÇÃO DO FIREBASE
-    const firebaseConfig = {
-        apiKey: "AIzaSyBJvZF2jPAfXpiwd2yKvBoe2xRjyQcO0wU",
-        authDomain: "jamp-pratas-bfa64.firebaseapp.com",
-        projectId: "jamp-pratas-bfa64",
-        storageBucket: "jamp-pratas-bfa64.firebasestorage.app",
-        messagingSenderId: "486145329966",
-        appId: "1:486145329966:web:e10074144bddcde3fe88bf"
-    };
+        // CONFIGURAÇÃO DO FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyBJvZF2jPAfXpiwd2yKvBoe2xRjyQcO0wU",
+            authDomain: "jamp-pratas-bfa64.firebaseapp.com",
+            projectId: "jamp-pratas-bfa64",
+            storageBucket: "jamp-pratas-bfa64.firebasestorage.app",
+            messagingSenderId: "486145329966",
+            appId: "1:486145329966:web:e10074144bddcde3fe88bf"
+        };
 
-    // CONFIG EMAILJS
-    const EMAILJS_SERVICE_ID = 'service_x7obp1b';
-    const EMAILJS_TEMPLATE_ID = 'template_38krot4';
+        // CONFIG EMAILJS
+        const EMAILJS_SERVICE_ID = 'service_x7obp1b';
+        const EMAILJS_TEMPLATE_ID = 'template_38krot4';
 
-    // Limites de segurança para evitar abusos / erros de tamanho
-    const MAX_TEXT_LENGTH = 4000;   // texto livre (observações / mensagem e-mail)
-    const MAX_EMAIL_SUBJECT = 120;  // assunto do e-mail
-    const MAX_ORDER_VALUE = 999999.99;
+        // Inicializar Firebase
+        let db;
+        let auth;
+        let currentUser = null;
+        let currentReceiptOrder = null;
 
-    // Inicializar Firebase
-    let db;
-    let auth;
-    let currentUser = null;
-    let currentReceiptOrder = null;
-
-    try {
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-        auth = firebase.auth();
-        console.log('Firebase inicializado com sucesso!');
-    } catch (error) {
-        console.error('Erro ao inicializar Firebase:', error);
-        alert('Erro ao conectar com o banco de dados. Verifique as configurações do Firebase.');
-    }
-
-    let orders = [];
-    let editingOrderId = null;
-    let unsubscribe = null;
-    let users = [];
-    let isLoadingUsers = false;
-
-    // ===== Helpers de segurança =====
-    function requireAuth() {
-        if (!currentUser || !auth.currentUser) {
-            showError('Sua sessão expirou. Faça login novamente.');
-            showLoginScreen();
-            throw new Error('UNAUTHENTICATED');
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            auth = firebase.auth();
+            console.log('Firebase inicializado com sucesso!');
+        } catch (error) {
+            console.error('Erro ao inicializar Firebase:', error);
+            alert('Erro ao conectar com o banco de dados. Verifique as configurações do Firebase.');
         }
-    }
 
-    function isAdmin() {
-        return currentUser && currentUser.role === 'admin';
-    }
+        let orders = [];
+        let editingOrderId = null;
+        let unsubscribe = null;
+        let users = [];
+        let isLoadingUsers = false;
 
-    // AUTENTICAÇÃO
-    auth.onAuthStateChanged(async (user) => {
-        console.log('=== AUTH STATE CHANGED ===');
-        console.log('User:', user ? user.email : 'null');
-
-        if (user) {
-            const userData = await getUserData(user.uid);
-            if (userData && userData.active !== false) {
-                currentUser = {
-                    uid: user.uid,
-                    email: user.email,
-                    name: userData.name,
-                    role: userData.role
-                };
-                showMainSystem();
-                loadOrders();
-                if (userData.role === 'admin') {
-                    showAdminFeatures();
-                    const usersTab = document.getElementById('tab-usuarios');
-                    if (usersTab && usersTab.classList.contains('active')) {
-                        loadUsers();
+        // AUTENTICAÇÃO
+        auth.onAuthStateChanged(async (user) => {
+            console.log('=== AUTH STATE CHANGED ===');
+            console.log('User:', user ? user.email : 'null');
+            
+            if (user) {
+                const userData = await getUserData(user.uid);
+                if (userData) {
+                    currentUser = {
+                        uid: user.uid,
+                        email: user.email,
+                        name: userData.name,
+                        role: userData.role
+                    };
+                    showMainSystem();
+                    loadOrders();
+                    if (userData.role === 'admin') {
+                        showAdminFeatures();
+                        const usersTab = document.getElementById('tab-usuarios');
+                        if (usersTab && usersTab.classList.contains('active')) {
+                            loadUsers();
+                        }
                     }
+                } else {
+                    auth.signOut();
                 }
             } else {
-                // Usuário sem dados ou desativado
-                showError('Seu usuário está inativo ou não configurado. Fale com o administrador.');
-                currentUser = null;
-                auth.signOut();
                 showLoginScreen();
             }
-        } else {
-            // Limpa tudo na saída
-            currentUser = null;
-            orders = [];
-            users = [];
-            if (unsubscribe) {
-                unsubscribe();
-                unsubscribe = null;
+        });
+
+        async function getUserData(uid) {
+            try {
+                const doc = await db.collection('users').doc(uid).get();
+                if (doc.exists) return doc.data();
+                return null;
+            } catch (error) {
+                console.error('Erro ao buscar dados do usuário:', error);
+                return null;
             }
-            showLoginScreen();
         }
-    });
 
-    async function getUserData(uid) {
-        try {
-            const doc = await db.collection('users').doc(uid).get();
-            if (doc.exists) return doc.data();
-            return null;
-        } catch (error) {
-            console.error('Erro ao buscar dados do usuário:', error);
-            return null;
-        }
-    }
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const loginBtn = document.getElementById('loginButton');
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Entrando...';
 
-    // Login
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('loginEmail').value.trim();
-        const password = document.getElementById('loginPassword').value;
-        const loginBtn = document.getElementById('loginButton');
-        loginBtn.disabled = true;
-        loginBtn.textContent = 'Entrando...';
-
-        try {
-            await auth.signInWithEmailAndPassword(email, password);
-        } catch (error) {
-            console.error('Erro ao fazer login:', error);
-            let errorMessage = 'Erro ao fazer login. Verifique suas credenciais.';
-            if (error.code === 'auth/user-not-found') errorMessage = 'Usuário não encontrado.';
-            else if (error.code === 'auth/wrong-password') errorMessage = 'Senha incorreta.';
-            else if (error.code === 'auth/invalid-email') errorMessage = 'E-mail inválido.';
-            showError(errorMessage);
-            loginBtn.disabled = false;
-            loginBtn.textContent = 'Entrar';
-        }
-    });
-
-    function logout() {
-        if (confirm('Tem certeza que deseja sair?')) {
-            if (unsubscribe) {
-                unsubscribe();
-                unsubscribe = null;
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+            } catch (error) {
+                console.error('Erro ao fazer login:', error);
+                let errorMessage = 'Erro ao fazer login. Verifique suas credenciais.';
+                if (error.code === 'auth/user-not-found') errorMessage = 'Usuário não encontrado.';
+                else if (error.code === 'auth/wrong-password') errorMessage = 'Senha incorreta.';
+                else if (error.code === 'auth/invalid-email') errorMessage = 'E-mail inválido.';
+                showError(errorMessage);
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Entrar';
             }
-            orders = [];
-            users = [];
-            currentUser = null;
-            updateSyncStatus('Faça login para ver os pedidos');
-            auth.signOut().catch(() => {});
-            showLoginScreen();
+        });
+
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                if (unsubscribe) {
+                    unsubscribe();
+                    unsubscribe = null;
+                }
+                orders = [];
+                currentUser = null;
+                updateSyncStatus('Faça login para ver os pedidos');
+                auth.signOut();
+            }
         }
-    }
 
-    function showLoginScreen() {
-        document.getElementById('loginScreen').style.display = 'flex';
-        document.getElementById('mainSystem').classList.remove('active');
-        const loginForm = document.getElementById('loginForm');
-        const loginBtn = document.getElementById('loginButton');
-        if (loginForm) loginForm.reset();
-        if (loginBtn) {
-            loginBtn.disabled = false;
-            loginBtn.textContent = 'Entrar';
+        function showLoginScreen() {
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('mainSystem').classList.remove('active');
+            const loginForm = document.getElementById('loginForm');
+            const loginBtn = document.getElementById('loginButton');
+            if (loginForm) loginForm.reset();
+            if (loginBtn) {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Entrar';
+            }
         }
-    }
 
-    function showMainSystem() {
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('mainSystem').classList.add('active');
-        document.getElementById('userName').textContent = currentUser.name;
+        function showMainSystem() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainSystem').classList.add('active');
+            document.getElementById('userName').textContent = currentUser.name;
 
-        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-        document.querySelector('.tab-button[onclick*="pedidos"]').classList.add('active');
-        document.getElementById('tab-pedidos').classList.add('active');
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelector('.tab-button[onclick*="pedidos"]').classList.add('active');
+            document.getElementById('tab-pedidos').classList.add('active');
 
-        const usersTabButton = document.getElementById('usersTab');
-        const usersTabContent = document.getElementById('tab-usuarios');
-        if (usersTabButton) usersTabButton.style.display = 'none';
-        if (usersTabContent) usersTabContent.classList.remove('active');
-    }
+            const usersTabButton = document.getElementById('usersTab');
+            const usersTabContent = document.getElementById('tab-usuarios');
+            if (usersTabButton) usersTabButton.style.display = 'none';
+            if (usersTabContent) usersTabContent.classList.remove('active');
+        }
 
-    function showAdminFeatures() {
-        document.getElementById('userRole').style.display = 'inline';
-        const usersTabButton = document.getElementById('usersTab');
-        const usersTabContent = document.getElementById('tab-usuarios');
+        function showAdminFeatures() {
+            document.getElementById('userRole').style.display = 'inline';
+            const usersTabButton = document.getElementById('usersTab');
+            const usersTabContent = document.getElementById('tab-usuarios');
+            if (usersTabButton) usersTabButton.style.display = 'block';
+            if (usersTabContent) usersTabContent.style.display = 'block';
+        }
 
-        // Mostra apenas o botão da aba "Usuários"
-        if (usersTabButton) usersTabButton.style.display = 'block';
+        function switchTab(tabName, event) {
+            if (tabName === 'usuarios') {
+                if (!currentUser || currentUser.role !== 'admin') {
+                    showError('Apenas administradores podem acessar essa aba.');
+                    return;
+                }
+            }
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            if (event && event.target) event.target.classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+            if (tabName === 'usuarios' && currentUser.role === 'admin') {
+                loadUsers();
+            }
+        }
 
-        // Não força o conteúdo a aparecer; continua escondido até ganhar .active
-        if (usersTabContent) usersTabContent.classList.remove('active');
-    }
-
-    function switchTab(tabName, event) {
-        if (tabName === 'usuarios') {
-            if (!currentUser || !isAdmin()) {
-                showError('Apenas administradores podem acessar essa aba.');
+        // CRIAR USUÁRIO
+        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (currentUser.role !== 'admin') {
+                showError('Apenas administradores podem criar usuários.');
                 return;
             }
-        }
-        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-        if (event && event.target) event.target.classList.add('active');
-        document.getElementById('tab-' + tabName).classList.add('active');
-        if (tabName === 'usuarios' && isAdmin()) {
-            loadUsers();
-        }
-    }
 
-    // CRIAR USUÁRIO
-    document.getElementById('createUserForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        try {
-            requireAuth();
-        } catch {
-            return;
-        }
+            const name = document.getElementById('newUserName').value;
+            const email = document.getElementById('newUserEmail').value;
+            const password = document.getElementById('newUserPassword').value;
+            const role = document.querySelector('input[name="userRole"]:checked').value;
+            const adminPassword = document.getElementById('adminPassword').value;
+            const createBtn = document.getElementById('createUserBtn');
+            
+            const adminEmail = currentUser.email;
+            const adminUid = currentUser.uid;
+            
+            createBtn.disabled = true;
+            createBtn.textContent = 'Criando...';
 
-        if (!isAdmin()) {
-            showError('Apenas administradores podem criar usuários.');
-            return;
-        }
+            try {
+                const credential = firebase.auth.EmailAuthProvider.credential(adminEmail, adminPassword);
+                await auth.currentUser.reauthenticateWithCredential(credential);
 
-        const name = document.getElementById('newUserName').value.trim();
-        const email = document.getElementById('newUserEmail').value.trim();
-        const password = document.getElementById('newUserPassword').value;
-        const role = document.querySelector('input[name="userRole"]:checked').value;
-        const adminPassword = document.getElementById('adminPassword').value;
-        const createBtn = document.getElementById('createUserBtn');
+                const secondaryApp = firebase.initializeApp(firebaseConfig, "SecondaryApp");
+                const secondaryAuth = secondaryApp.auth();
+                const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+                const newUserId = userCredential.user.uid;
 
-        if (!name || !email || !password) {
-            showError('Preencha todos os campos obrigatórios.');
-            return;
-        }
-
-        const adminEmail = currentUser.email;
-        const adminUid = currentUser.uid;
-
-        createBtn.disabled = true;
-        createBtn.textContent = 'Criando...';
-
-        try {
-            const credential = firebase.auth.EmailAuthProvider.credential(adminEmail, adminPassword);
-            await auth.currentUser.reauthenticateWithCredential(credential);
-
-            const secondaryApp = firebase.initializeApp(firebaseConfig, "SecondaryApp");
-            const secondaryAuth = secondaryApp.auth();
-            const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
-            const newUserId = userCredential.user.uid;
-
-            await db.collection('users').doc(newUserId).set({
-                name,
-                email,
-                role,
-                active: true,
-                createdAt: Date.now(),
-                createdBy: adminUid
-            });
-
-            await secondaryAuth.signOut();
-            await secondaryApp.delete();
-
-            showNotification('Usuário criado com sucesso!');
-            document.getElementById('createUserForm').reset();
-            await loadUsers();
-        } catch (error) {
-            console.error('Erro na criação de usuário:', error);
-            let errorMessage = 'Erro ao criar usuário.';
-            if (error.code === 'auth/email-already-in-use') errorMessage = 'Este e-mail já está em uso.';
-            else if (error.code === 'auth/weak-password') errorMessage = 'A senha deve ter pelo menos 6 caracteres.';
-            else if (error.code === 'auth/wrong-password') errorMessage = 'Senha do administrador incorreta!';
-            else if (error.code === 'auth/network-request-failed') errorMessage = 'Erro de conexão. Verifique sua internet.';
-            showError(errorMessage);
-        } finally {
-            createBtn.disabled = false;
-            createBtn.textContent = 'Criar Usuário';
-        }
-    });
-
-    async function loadUsers() {
-        try {
-            requireAuth();
-        } catch {
-            return;
-        }
-
-        if (!isAdmin()) {
-            showError('Apenas administradores podem visualizar usuários.');
-            return;
-        }
-
-        if (isLoadingUsers) return;
-        isLoadingUsers = true;
-        const tbody = document.getElementById('usersTableBody');
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="5" style="text-align: center; padding: 40px;">
-                    🔄 Carregando usuários...
-                </td>
-            </tr>
-        `;
-        try {
-            const snapshot = await db.collection('users').get();
-            users = [];
-            snapshot.forEach(doc => {
-                users.push({
-                    id: doc.id,
-                    ...doc.data()
+                await db.collection('users').doc(newUserId).set({
+                    name,
+                    email,
+                    role,
+                    active: true,
+                    createdAt: Date.now(),
+                    createdBy: adminUid
                 });
-            });
-            renderUsers();
-        } catch (error) {
-            console.error('Erro ao carregar usuários:', error);
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5" style="text-align: center; padding: 40px; color: #f44336;">
-                        ❌ Erro ao carregar usuários<br>
-                        <small style="color: #999; margin-top: 10px; display: block;">
-                            ${error.message || 'Verifique as regras do Firestore'}
-                        </small>
-                        <button class="button btn-small" onclick="loadUsers()" style="background: var(--gold); color: var(--dark); margin-top: 15px;">
-                            Tentar Novamente
-                        </button>
-                    </td>
-                </tr>
-            `;
-            showError('Erro ao carregar usuários. Verifique o console (F12) para mais detalhes.');
-        } finally {
-            isLoadingUsers = false;
-        }
-    }
 
-    function renderUsers() {
-        const tbody = document.getElementById('usersTableBody');
-        if (users.length === 0) {
+                await secondaryAuth.signOut();
+                await secondaryApp.delete();
+
+                showNotification('Usuário criado com sucesso!');
+                document.getElementById('createUserForm').reset();
+                await loadUsers();
+            } catch (error) {
+                console.error('Erro na criação de usuário:', error);
+                let errorMessage = 'Erro ao criar usuário.';
+                if (error.code === 'auth/email-already-in-use') errorMessage = 'Este e-mail já está em uso.';
+                else if (error.code === 'auth/weak-password') errorMessage = 'A senha deve ter pelo menos 6 caracteres.';
+                else if (error.code === 'auth/wrong-password') errorMessage = 'Senha do administrador incorreta!';
+                else if (error.code === 'auth/network-request-failed') errorMessage = 'Erro de conexão. Verifique sua internet.';
+                showError(errorMessage);
+            } finally {
+                createBtn.disabled = false;
+                createBtn.textContent = 'Criar Usuário';
+            }
+        });
+
+        async function loadUsers() {
+            if (isLoadingUsers) return;
+            isLoadingUsers = true;
+            const tbody = document.getElementById('usersTableBody');
             tbody.innerHTML = `
                 <tr>
                     <td colspan="5" style="text-align: center; padding: 40px;">
-                        <div style="color: #999; margin-bottom: 15px;">
-                            📋 Nenhum usuário cadastrado ainda
-                        </div>
-                        <button class="button btn-small" onclick="loadUsers()" style="background: var(--gold); color: var(--dark);">
-                            Recarregar Lista
-                        </button>
+                        🔄 Carregando usuários...
                     </td>
                 </tr>
             `;
-            return;
-        }
-        tbody.innerHTML = users.map(user => `
-            <tr>
-                <td>${user.name || 'N/A'}</td>
-                <td>${user.email || 'N/A'}</td>
-                <td>${user.role === 'admin' ? 'Administrador' : 'Usuário'}</td>
-                <td>
-                    <span class="user-status ${user.active ? 'user-active' : 'user-inactive'}">
-                        ${user.active ? 'Ativo' : 'Inativo'}
-                    </span>
-                </td>
-                <td>
-                    <div class="user-actions">
-                        ${user.id !== (currentUser && currentUser.uid) ? `
-                            <button class="button btn-small" onclick="toggleUserStatus('${user.id}', ${!user.active})">
-                                ${user.active ? 'Desativar' : 'Ativar'}
-                            </button>
-                        ` : '<span style="color: var(--gold);">Você</span>'}
-                    </div>
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    async function toggleUserStatus(userId, newStatus) {
-        try {
-            requireAuth();
-        } catch {
-            return;
-        }
-
-        if (!isAdmin()) {
-            showError('Apenas administradores podem gerenciar usuários.');
-            return;
-        }
-        if (userId === currentUser.uid) {
-            showError('Você não pode alterar o próprio status.');
-            return;
-        }
-        try {
-            await db.collection('users').doc(userId).update({ active: newStatus });
-            showNotification(`Usuário ${newStatus ? 'ativado' : 'desativado'} com sucesso!`);
-            loadUsers();
-        } catch (error) {
-            console.error('Erro ao atualizar usuário:', error);
-            showError('Erro ao atualizar usuário.');
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        setMinDeliveryDate();
-        setupSearch();
-    });
-
-    function setMinDeliveryDate() {
-        const today = new Date().toISOString().split('T')[0];
-        const input = document.getElementById('deliveryDate');
-        input.min = today;
-        if (!input.value) input.value = today;
-    }
-
-    function phoneMask(value) {
-        if (!value) return '';
-        value = value.replace(/\D/g, '');
-        value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
-        value = value.replace(/(\d)(\d{4})$/, '$1-$2');
-        return value;
-    }
-
-    function currencyMask(value) {
-        if (!value) return '';
-        value = value.replace(/\D/g, '');
-        value = value.replace(/(\d)(\d{2})$/, '$1,$2');
-        value = value.replace(/(?=(\d{3})+(\D))\B/g, '.');
-        return value;
-    }
-
-    function currencyToNumber(value) {
-        if (!value) return 0;
-        return parseFloat(value.replace(/\./g, '').replace(',', '.')) || 0;
-    }
-
-    function numberToCurrency(value) {
-        if (!value && value !== 0) return '';
-        return value.toFixed(2).replace('.', ',').replace(/(\d)(?=(\d{3})+\,)/g, '$1.');
-    }
-
-    document.getElementById('phone').addEventListener('input', (e) => {
-        e.target.value = phoneMask(e.target.value);
-    });
-    document.getElementById('value').addEventListener('input', (e) => {
-        e.target.value = currencyMask(e.target.value);
-    });
-    document.getElementById('downPayment').addEventListener('input', (e) => {
-        e.target.value = currencyMask(e.target.value);
-    });
-
-    function loadOrders() {
-        try {
-            requireAuth();
-        } catch {
-            return;
-        }
-
-        if (!db) {
-            showError('Banco de dados não inicializado');
-            return;
-        }
-        if (unsubscribe) unsubscribe();
-
-        unsubscribe = db.collection('orders')
-            .orderBy('createdAt', 'desc')
-            .onSnapshot((snapshot) => {
-                orders = [];
-                snapshot.forEach((doc) => {
-                    const orderData = doc.data();
-                    if (!orderData.createdAt) {
-                        orderData.createdAt = Date.now();
-                        db.collection('orders').doc(doc.id).update({ createdAt: orderData.createdAt }).catch(() => {});
-                    }
-                    orders.push({
+            try {
+                const snapshot = await db.collection('users').get();
+                users = [];
+                snapshot.forEach(doc => {
+                    users.push({
                         id: doc.id,
-                        ...orderData
+                        ...doc.data()
                     });
                 });
-
-                // Privacidade básica: se não for admin, mostra só pedidos criados por ele
-                const visibleOrders = isAdmin()
-                    ? orders
-                    : orders.filter(o => o.createdBy === currentUser.uid);
-
-                renderOrdersUI(visibleOrders);
-                updateSyncStatus('Sincronizado');
-            }, (error) => {
-                console.error('Erro ao carregar pedidos:', error);
-                updateSyncStatus('Erro de sincronização');
-                showError('Erro ao carregar pedidos');
-            });
-    }
-
-    function updateSyncStatus(status) {
-        document.getElementById('syncStatus').textContent = status;
-    }
-
-    document.getElementById('orderForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        try {
-            requireAuth();
-        } catch {
-            return;
-        }
-
-        const deliveryDate = document.getElementById('deliveryDate').value;
-        const today = new Date().toISOString().split('T')[0];
-        if (deliveryDate < today) {
-            showError('A data de entrega não pode ser anterior à data atual!');
-            return;
-        }
-
-        const valueNumber = currencyToNumber(document.getElementById('value').value);
-        const downNumber = currencyToNumber(document.getElementById('downPayment').value);
-
-        if (valueNumber <= 0 || valueNumber > MAX_ORDER_VALUE) {
-            showError('Informe um valor válido para o pedido.');
-            return;
-        }
-        if (downNumber < 0) {
-            showError('A entrada não pode ser negativa.');
-            return;
-        }
-        if (downNumber > valueNumber) {
-            showError('A entrada não pode ser maior que o valor total.');
-            return;
-        }
-
-        const observations = document.getElementById('observations').value;
-        if (observations && observations.length > MAX_TEXT_LENGTH) {
-            showError(`Observações muito grandes. Máximo de ${MAX_TEXT_LENGTH} caracteres.`);
-            return;
-        }
-
-        const submitBtn = document.getElementById('submitBtn');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Salvando...';
-
-        const baseOrder = editingOrderId ? orders.find(o => o.id === editingOrderId) : null;
-
-        const formData = {
-            clientName: document.getElementById('clientName').value.trim(),
-            phone: document.getElementById('phone').value.trim(),
-            description: document.getElementById('description').value.trim(),
-            ringSize: document.getElementById('ringSize').value.trim(),
-            engraving: document.getElementById('engraving').value.trim(),
-            value: valueNumber,
-            deliveryDate: deliveryDate,
-            paymentStatus: document.querySelector('input[name="paymentStatus"]:checked').value,
-            paymentMethod: document.getElementById('paymentMethod').value,
-            downPayment: downNumber,
-            observations: observations.trim(),
-            createdAt: baseOrder ? baseOrder.createdAt : Date.now(),
-            createdBy: baseOrder ? baseOrder.createdBy : currentUser.uid,
-            createdByName: baseOrder ? baseOrder.createdByName : currentUser.name
-        };
-
-        try {
-            if (editingOrderId) {
-                await db.collection('orders').doc(editingOrderId).update(formData);
-                showNotification('Pedido atualizado com sucesso!');
-                editingOrderId = null;
-                document.getElementById('form-title').textContent = 'Novo Pedido';
-            } else {
-                await db.collection('orders').add(formData);
-                showNotification('Pedido salvo com sucesso!');
-            }
-            document.getElementById('orderForm').reset();
-            setMinDeliveryDate();
-        } catch (error) {
-            console.error('Erro ao salvar pedido:', error);
-            showError('Erro ao salvar pedido');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Salvar Pedido';
-        }
-    });
-
-    document.getElementById('clearForm').addEventListener('click', () => {
-        document.getElementById('orderForm').reset();
-        editingOrderId = null;
-        document.getElementById('form-title').textContent = 'Novo Pedido';
-        setMinDeliveryDate();
-    });
-
-    function renderOrdersUI(sourceOrders, searchTerm = '') {
-        const ordersList = document.getElementById('ordersList');
-        let filteredOrders = sourceOrders;
-
-        if (searchTerm) {
-            filteredOrders = sourceOrders.filter(order =>
-                (order.clientName || '').toLowerCase().includes(searchTerm)
-            );
-        }
-
-        if (filteredOrders.length === 0) {
-            ordersList.innerHTML = `
-                <div class="empty-state">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p>${searchTerm ? 'Nenhum pedido encontrado' : 'Nenhum pedido cadastrado ainda'}</p>
-                </div>
-            `;
-            return;
-        }
-
-        ordersList.innerHTML = filteredOrders.map(order => {
-            const statusClass = order.paymentStatus === 'pago' ? 'status-pago' :
-                              order.paymentStatus === '50%' ? 'status-metade' : 'status-pendente';
-            const statusText = order.paymentStatus === 'pago' ? 'PAGO' :
-                             order.paymentStatus === '50%' ? '50%' : 'PENDENTE';
-
-            return `
-                <div class="order-item">
-                    <h3>${order.clientName} <span class="status-badge ${statusClass}">${statusText}</span></h3>
-                    <p><strong>Telefone:</strong> ${order.phone}</p>
-                    <p><strong>Descrição:</strong> ${order.description}</p>
-                    <p><strong>Valor:</strong> R$ ${numberToCurrency(order.value)}</p>
-                    <p><strong>Entrega:</strong> ${formatDate(order.deliveryDate)}</p>
-                    <p style="font-size: 0.85em; color: #999; margin-top: 10px;"><strong>Criado por:</strong> ${order.createdByName || 'N/A'}</p>
-                    <div class="order-actions">
-                        <button class="button btn-small" onclick="viewReceipt('${order.id}')">Ver Recibo</button>
-                        <button class="button button-secondary btn-small" onclick="editOrder('${order.id}')">Editar</button>
-                        <button class="button button-secondary btn-small" onclick="deleteOrder('${order.id}')">Excluir</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    function renderOrders(searchTerm = '') {
-        const visibleOrders = isAdmin()
-            ? orders
-            : orders.filter(o => o.createdBy === (currentUser && currentUser.uid));
-        renderOrdersUI(visibleOrders, searchTerm);
-    }
-
-    async function editOrder(id) {
-        try {
-            requireAuth();
-        } catch {
-            return;
-        }
-
-        const order = orders.find(o => o.id === id);
-        if (!order) return;
-
-        // Usuário comum só pode editar pedido próprio
-        if (!isAdmin() && order.createdBy !== currentUser.uid) {
-            showError('Você não tem permissão para editar este pedido.');
-            return;
-        }
-
-        editingOrderId = id;
-        document.getElementById('form-title').textContent = 'Editar Pedido';
-
-        document.getElementById('clientName').value = order.clientName;
-        document.getElementById('phone').value = phoneMask(order.phone);
-        document.getElementById('description').value = order.description;
-        document.getElementById('ringSize').value = order.ringSize || '';
-        document.getElementById('engraving').value = order.engraving || '';
-        document.getElementById('value').value = numberToCurrency(order.value);
-        document.getElementById('deliveryDate').value = order.deliveryDate;
-        document.querySelector(`input[name="paymentStatus"][value="${order.paymentStatus}"]`).checked = true;
-        document.getElementById('paymentMethod').value = order.paymentMethod || '';
-        document.getElementById('downPayment').value = order.downPayment ? numberToCurrency(order.downPayment) : '';
-        document.getElementById('observations').value = order.observations || '';
-
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    async function deleteOrder(id) {
-        try {
-            requireAuth();
-        } catch {
-            return;
-        }
-
-        const order = orders.find(o => o.id === id);
-        if (!order) return;
-
-        // Usuário comum só pode excluir pedido próprio
-        if (!isAdmin() && order.createdBy !== currentUser.uid) {
-            showError('Você não tem permissão para excluir este pedido.');
-            return;
-        }
-
-        if (confirm('Tem certeza que deseja excluir este pedido?')) {
-            try {
-                await db.collection('orders').doc(id).delete();
-                showNotification('Pedido excluído com sucesso!');
+                renderUsers();
             } catch (error) {
-                console.error('Erro ao excluir pedido:', error);
-                showError('Erro ao excluir pedido');
+                console.error('Erro ao carregar usuários:', error);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 40px; color: #f44336;">
+                            ❌ Erro ao carregar usuários<br>
+                            <small style="color: #999; margin-top: 10px; display: block;">
+                                ${error.message || 'Verifique as regras do Firestore'}
+                            </small>
+                            <button class="button btn-small" onclick="loadUsers()" style="background: var(--gold); color: var(--dark); margin-top: 15px;">
+                                Tentar Novamente
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                showError('Erro ao carregar usuários. Verifique o console (F12) para mais detalhes.');
+            } finally {
+                isLoadingUsers = false;
             }
         }
-    }
 
-    // Remove emojis e caracteres especiais para impressão térmica
-    function sanitizeText(text) {
-        if (!text) return "";
-
-        // Remove emojis
-        text = text.replace(
-            /([\u2700-\u27BF]|[\uE000-\uF8FF]|[\uD83C-\uDBFF\uDC00-\uDFFF])+/g,
-            ""
-        );
-
-        // Remove acentos
-        text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-        // Permite: letras/números (\w), espaço (\s), . , : / # @ ( ) - [ ]
-        text = text.replace(/[^\w\s.,:/#@()\-\[\]]/g, "");
-
-        return text.trim();
-    }
-
-    function generateThermalReceipt(order) {
-        if (!order) return;
-
-        document.getElementById("t-order-id").textContent = (order._id || "").toString().slice(-6);
-
-        let createdDate;
-        if (order.createdAt) {
-            if (order.createdAt.toDate) createdDate = order.createdAt.toDate();
-            else createdDate = new Date(order.createdAt);
-        } else {
-            createdDate = new Date();
+        function renderUsers() {
+            const tbody = document.getElementById('usersTableBody');
+            if (users.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 40px;">
+                            <div style="color: #999; margin-bottom: 15px;">
+                                📋 Nenhum usuário cadastrado ainda
+                            </div>
+                            <button class="button btn-small" onclick="loadUsers()" style="background: var(--gold); color: var(--dark);">
+                                Recarregar Lista
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            tbody.innerHTML = users.map(user => `
+                <tr>
+                    <td>${user.name || 'N/A'}</td>
+                    <td>${user.email || 'N/A'}</td>
+                    <td>${user.role === 'admin' ? 'Administrador' : 'Usuário'}</td>
+                    <td>
+                        <span class="user-status ${user.active ? 'user-active' : 'user-inactive'}">
+                            ${user.active ? 'Ativo' : 'Inativo'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="user-actions">
+                            ${user.id !== currentUser.uid ? `
+                                <button class="button btn-small" onclick="toggleUserStatus('${user.id}', ${!user.active})">
+                                    ${user.active ? 'Desativar' : 'Ativar'}
+                                </button>
+                            ` : '<span style="color: var(--gold);">Você</span>'}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
         }
-        const formattedDateTime = createdDate.toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        }) + ' ' + createdDate.toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit'
+
+        async function toggleUserStatus(userId, newStatus) {
+            if (currentUser.role !== 'admin') {
+                showError('Apenas administradores podem gerenciar usuários.');
+                return;
+            }
+            try {
+                await db.collection('users').doc(userId).update({ active: newStatus });
+                showNotification(`Usuário ${newStatus ? 'ativado' : 'desativado'} com sucesso!`);
+                loadUsers();
+            } catch (error) {
+                console.error('Erro ao atualizar usuário:', error);
+                showError('Erro ao atualizar usuário.');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setMinDeliveryDate();
+            setupSearch();
         });
-        document.getElementById("t-date").textContent = formattedDateTime;
 
-        document.getElementById("t-client").textContent = sanitizeText(order.clientName);
-        document.getElementById("t-phone").textContent = sanitizeText(order.phone);
-        document.getElementById("t-description").textContent = sanitizeText(order.description);
-
-        if (order.ringSize) {
-            document.getElementById("t-ring").style.display = "inline";
-            document.getElementById("t-ring-size").textContent = sanitizeText(order.ringSize);
-        } else {
-            document.getElementById("t-ring").style.display = "none";
+        function setMinDeliveryDate() {
+            const today = new Date().toISOString().split('T')[0];
+            const input = document.getElementById('deliveryDate');
+            input.min = today;
+            if (!input.value) input.value = today;
         }
 
-        if (order.engraving) {
-            document.getElementById("t-engraving").style.display = "inline";
-            document.getElementById("t-engraving-text").textContent = sanitizeText(order.engraving);
-        } else {
-            document.getElementById("t-engraving").style.display = "none";
+        function phoneMask(value) {
+            if (!value) return '';
+            value = value.replace(/\D/g, '');
+            value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+            value = value.replace(/(\d)(\d{4})$/, '$1-$2');
+            return value;
         }
 
-        const total = order.value || 0;
-        const down = order.downPayment || 0;
-        const pending = total - down;
-
-        document.getElementById("t-value").textContent = numberToCurrency(total);
-        document.getElementById("t-down").textContent = numberToCurrency(down);
-        document.getElementById("t-pending").textContent = numberToCurrency(pending);
-
-        document.getElementById("t-delivery").textContent = formatDate(order.deliveryDate);
-        document.getElementById("t-user").textContent = sanitizeText(order.createdByName || "");
-
-        document.getElementById("t-footer").textContent = sanitizeText("Siga @jamppratas 💎");
-    }
-
-    function printThermalReceipt() {
-        try {
-            requireAuth();
-        } catch {
-            return;
+        function currencyMask(value) {
+            if (!value) return '';
+            value = value.replace(/\D/g, '');
+            value = value.replace(/(\d)(\d{2})$/, '$1,$2');
+            value = value.replace(/(?=(\d{3})+(\D))\B/g, '.');
+            return value;
         }
 
-        if (!currentReceiptOrder) {
-            showError("Abra um recibo antes de imprimir na impressora térmica.");
-            return;
-        }
-        generateThermalReceipt(currentReceiptOrder);
-
-        const thermalDiv = document.getElementById("thermal-receipt");
-        if (!thermalDiv) {
-            showError("Modelo de recibo térmico não encontrado.");
-            return;
+        function currencyToNumber(value) {
+            if (!value) return 0;
+            return parseFloat(value.replace(/\./g, '').replace(',', '.')) || 0;
         }
 
-        const printWindow = window.open("", "_blank", "width=400,height=600");
-        const html = `
-            <html>
-            <head>
-                <title>Recibo Térmico - JAMP Pratas</title>
-                <style>
-                    @page { margin: 2mm; }
-                    body {
-                        font-family: monospace;
-                        font-size: 12px;
-                        width: 58mm;
-                        max-width: 58mm;
-                        margin: 0;
-                        padding: 0;
-                    }
-                </style>
-            </head>
-            <body>
-                ${thermalDiv.innerHTML}
-                <script>
-                    window.onload = function() {
-                        window.print();
-                        window.onfocus = function() { window.close(); };
-                    };
-                <\/script>
-            </body>
-            </html>
-        `;
-        printWindow.document.open();
-        printWindow.document.write(html);
-        printWindow.document.close();
-    }
-
-    // Visualizar recibo A4
-    function viewReceipt(id) {
-        try {
-            requireAuth();
-        } catch {
-            return;
+        function numberToCurrency(value) {
+            if (!value && value !== 0) return '';
+            return value.toFixed(2).replace('.', ',').replace(/(\d)(?=(\d{3})+\,)/g, '$1.');
         }
 
-        const order = orders.find(o => o.id === id);
-        if (!order) return;
-
-        // Usuário comum só pode ver pedidos próprios
-        if (!isAdmin() && order.createdBy !== currentUser.uid) {
-            showError('Você não tem permissão para visualizar este pedido.');
-            return;
-        }
-
-        currentReceiptOrder = { ...order, _id: id };
-
-        document.getElementById('receipt-order-number').textContent = id.toString().slice(-6);
-
-        let createdDate;
-        if (order.createdAt) {
-            if (order.createdAt.toDate) createdDate = order.createdAt.toDate();
-            else createdDate = new Date(order.createdAt);
-        } else {
-            createdDate = new Date();
-        }
-        const formattedDateTime = createdDate.toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: 'long',
-            year: 'numeric'
-        }) + ' às ' + createdDate.toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit'
+        document.getElementById('phone').addEventListener('input', (e) => {
+            e.target.value = phoneMask(e.target.value);
         });
-        document.getElementById('receipt-datetime').textContent = formattedDateTime;
+        document.getElementById('value').addEventListener('input', (e) => {
+            e.target.value = currencyMask(e.target.value);
+        });
+        document.getElementById('downPayment').addEventListener('input', (e) => {
+            e.target.value = currencyMask(e.target.value);
+        });
 
-        document.getElementById('receipt-client').textContent = order.clientName;
-        document.getElementById('receipt-phone').textContent = order.phone;
-        document.getElementById('receipt-description').textContent = order.description;
-
-        const ringRow = document.getElementById('receipt-ring-row');
-        if (order.ringSize) {
-            document.getElementById('receipt-ring').textContent = order.ringSize;
-            ringRow.style.display = 'flex';
-        } else {
-            ringRow.style.display = 'none';
-        }
-
-        const engravingRow = document.getElementById('receipt-engraving-row');
-        if (order.engraving) {
-            document.getElementById('receipt-engraving').textContent = order.engraving;
-            engravingRow.style.display = 'flex';
-        } else {
-            engravingRow.style.display = 'none';
-        }
-
-        document.getElementById('receipt-observations-content').textContent =
-            order.observations || 'Nenhuma observação adicional.';
-
-        const paymentStatusText = order.paymentStatus === 'pago' ? 'PAGO' :
-                                 order.paymentStatus === '50%' ? '50% PAGO' : 'PENDENTE';
-        const paymentMethodText = order.paymentMethod || 'Não informado';
-
-        document.getElementById('receipt-payment-method').textContent = `${paymentMethodText} - ${paymentStatusText}`;
-        document.getElementById('receipt-down-payment').textContent = order.downPayment > 0 ?
-            `R$ ${numberToCurrency(order.downPayment)}` : 'R$ 0,00';
-
-        const pendingValue = order.value - order.downPayment;
-        document.getElementById('receipt-pending').textContent = `R$ ${numberToCurrency(pendingValue)}`;
-
-        document.getElementById('receipt-total').textContent = `R$ ${numberToCurrency(order.value)}`;
-        document.getElementById('receipt-delivery-date').textContent = formatDate(order.deliveryDate);
-        document.getElementById('receipt-created-by-name').textContent = order.createdByName || 'N/A';
-
-        // já prepara o recibo térmico
-        generateThermalReceipt(currentReceiptOrder);
-
-        document.getElementById('receiptModal').classList.add('active');
-    }
-
-    function closeModal() {
-        document.getElementById('receiptModal').classList.remove('active');
-    }
-
-    function openEmailModal() {
-        try {
-            requireAuth();
-        } catch {
-            return;
-        }
-
-        const receiptModal = document.getElementById('receiptModal');
-        if (!receiptModal.classList.contains('active')) {
-            showError('Abra um recibo antes de enviar por email.');
-            return;
-        }
-        document.getElementById('emailModal').classList.add('active');
-    }
-
-    function closeEmailModal() {
-        document.getElementById('emailModal').classList.remove('active');
-        const form = document.getElementById('emailForm');
-        if (form) form.reset();
-        const statusDiv = document.getElementById('emailStatus');
-        if (statusDiv) {
-            statusDiv.style.display = 'none';
-            statusDiv.innerHTML = '';
-        }
-    }
-
-    function buildReceiptHtmlForEmail(customMessage = '') {
-        const original = document.getElementById('receiptContent');
-        if (!original) return '';
-        const receiptNode = original.cloneNode(true);
-        const actions = receiptNode.querySelector('.modal-actions');
-        if (actions) actions.remove();
-
-        if (customMessage && customMessage.trim()) {
-            const msgDiv = document.createElement('div');
-            msgDiv.textContent = customMessage;
-            msgDiv.style.marginBottom = '20px';
-            msgDiv.style.padding = '10px';
-            msgDiv.style.border = '1px solid #eee';
-            msgDiv.style.background = '#fafafa';
-            receiptNode.insertBefore(msgDiv, receiptNode.firstChild);
-        }
-
-        const receiptHtml = receiptNode.innerHTML;
-
-        return `
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <title>Recibo - JAMP Pratas</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                background: #ffffff;
-                color: #1a1a1a;
-                margin: 0;
-                padding: 0;
+        function loadOrders() {
+            if (!db) {
+                showError('Banco de dados não inicializado');
+                return;
             }
-            .receipt-container {
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 16px;
-            }
-            .receipt-logo {
-                background: #000000 !important;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="receipt-container">
-            ${receiptHtml}
-        </div>
-    </body>
-    </html>
-        `;
-    }
-
-    async function sendReceiptEmail(event) {
-        if (event && event.preventDefault) event.preventDefault();
-
-        try {
-            requireAuth();
-        } catch {
-            return;
+            if (unsubscribe) unsubscribe();
+            unsubscribe = db.collection('orders')
+                .orderBy('createdAt', 'desc')
+                .onSnapshot((snapshot) => {
+                    orders = [];
+                    snapshot.forEach((doc) => {
+                        const orderData = doc.data();
+                        if (!orderData.createdAt) {
+                            orderData.createdAt = Date.now();
+                            db.collection('orders').doc(doc.id).update({ createdAt: orderData.createdAt });
+                        }
+                        orders.push({
+                            id: doc.id,
+                            ...orderData
+                        });
+                    });
+                    renderOrders();
+                    updateSyncStatus('Sincronizado');
+                }, (error) => {
+                    console.error('Erro ao carregar pedidos:', error);
+                    updateSyncStatus('Erro de sincronização');
+                    showError('Erro ao carregar pedidos');
+                });
         }
 
-        try {
-            if (!window.emailjs) {
-                throw new Error('EmailJS não está carregado.');
+        function updateSyncStatus(status) {
+            document.getElementById('syncStatus').textContent = status;
+        }
+
+        document.getElementById('orderForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const deliveryDate = document.getElementById('deliveryDate').value;
+            const today = new Date().toISOString().split('T')[0];
+            if (deliveryDate < today) {
+                showError('A data de entrega não pode ser anterior à data atual!');
+                return;
+            }
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Salvando...';
+
+            const formData = {
+                clientName: document.getElementById('clientName').value,
+                phone: document.getElementById('phone').value,
+                description: document.getElementById('description').value,
+                ringSize: document.getElementById('ringSize').value,
+                engraving: document.getElementById('engraving').value,
+                value: currencyToNumber(document.getElementById('value').value),
+                deliveryDate: document.getElementById('deliveryDate').value,
+                paymentStatus: document.querySelector('input[name="paymentStatus"]:checked').value,
+                paymentMethod: document.getElementById('paymentMethod').value,
+                downPayment: currencyToNumber(document.getElementById('downPayment').value),
+                observations: document.getElementById('observations').value,
+                createdAt: editingOrderId ? orders.find(o => o.id === editingOrderId).createdAt : Date.now(),
+                createdBy: editingOrderId ? orders.find(o => o.id === editingOrderId).createdBy : currentUser.uid,
+                createdByName: editingOrderId ? orders.find(o => o.id === editingOrderId).createdByName : currentUser.name
+            };
+
+            try {
+                if (editingOrderId) {
+                    await db.collection('orders').doc(editingOrderId).update(formData);
+                    showNotification('Pedido atualizado com sucesso!');
+                    editingOrderId = null;
+                    document.getElementById('form-title').textContent = 'Novo Pedido';
+                } else {
+                    await db.collection('orders').add(formData);
+                    showNotification('Pedido salvo com sucesso!');
+                }
+                document.getElementById('orderForm').reset();
+            } catch (error) {
+                console.error('Erro ao salvar pedido:', error);
+                showError('Erro ao salvar pedido');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Salvar Pedido';
+            }
+        });
+
+        document.getElementById('clearForm').addEventListener('click', () => {
+            document.getElementById('orderForm').reset();
+            editingOrderId = null;
+            document.getElementById('form-title').textContent = 'Novo Pedido';
+        });
+
+        function renderOrders(searchTerm = '') {
+            const ordersList = document.getElementById('ordersList');
+            let filteredOrders = orders;
+            if (searchTerm) {
+                filteredOrders = orders.filter(order => 
+                    order.clientName.toLowerCase().includes(searchTerm)
+                );
             }
 
-            const recipientEmail = document.getElementById('recipientEmail').value.trim();
-            let subject = document.getElementById('emailSubject').value.trim();
-            let extraMessage = document.getElementById('emailMessage').value.trim();
-            const sendCopy = document.getElementById('sendCopy').checked;
-
-            if (!recipientEmail) {
-                showError('Informe o e-mail do destinatário.');
+            if (filteredOrders.length === 0) {
+                ordersList.innerHTML = `
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p>${searchTerm ? 'Nenhum pedido encontrado' : 'Nenhum pedido cadastrado ainda'}</p>
+                    </div>
+                `;
                 return;
             }
 
-            if (subject.length > MAX_EMAIL_SUBJECT) {
-                subject = subject.substring(0, MAX_EMAIL_SUBJECT);
+            ordersList.innerHTML = filteredOrders.map(order => {
+                const statusClass = order.paymentStatus === 'pago' ? 'status-pago' : 
+                                  order.paymentStatus === '50%' ? 'status-metade' : 'status-pendente';
+                const statusText = order.paymentStatus === 'pago' ? 'PAGO' : 
+                                 order.paymentStatus === '50%' ? '50%' : 'PENDENTE';
+                
+                return `
+                    <div class="order-item">
+                        <h3>${order.clientName} <span class="status-badge ${statusClass}">${statusText}</span></h3>
+                        <p><strong>Telefone:</strong> ${order.phone}</p>
+                        <p><strong>Descrição:</strong> ${order.description}</p>
+                        <p><strong>Valor:</strong> R$ ${numberToCurrency(order.value)}</p>
+                        <p><strong>Entrega:</strong> ${formatDate(order.deliveryDate)}</p>
+                        <p style="font-size: 0.85em; color: #999; margin-top: 10px;"><strong>Criado por:</strong> ${order.createdByName || 'N/A'}</p>
+                        <div class="order-actions">
+                            <button class="button btn-small" onclick="viewReceipt('${order.id}')">Ver Recibo</button>
+                            <button class="button button-secondary btn-small" onclick="editOrder('${order.id}')">Editar</button>
+                            <button class="button button-secondary btn-small" onclick="deleteOrder('${order.id}')">Excluir</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function editOrder(id) {
+            const order = orders.find(o => o.id === id);
+            if (!order) return;
+            editingOrderId = id;
+            document.getElementById('form-title').textContent = 'Editar Pedido';
+
+            document.getElementById('clientName').value = order.clientName;
+            document.getElementById('phone').value = phoneMask(order.phone);
+            document.getElementById('description').value = order.description;
+            document.getElementById('ringSize').value = order.ringSize || '';
+            document.getElementById('engraving').value = order.engraving || '';
+            document.getElementById('value').value = numberToCurrency(order.value);
+            document.getElementById('deliveryDate').value = order.deliveryDate;
+            document.querySelector(`input[name="paymentStatus"][value="${order.paymentStatus}"]`).checked = true;
+            document.getElementById('paymentMethod').value = order.paymentMethod || '';
+            document.getElementById('downPayment').value = order.downPayment ? numberToCurrency(order.downPayment) : '';
+            document.getElementById('observations').value = order.observations || '';
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function deleteOrder(id) {
+            if (confirm('Tem certeza que deseja excluir este pedido?')) {
+                try {
+                    await db.collection('orders').doc(id).delete();
+                    showNotification('Pedido excluído com sucesso!');
+                } catch (error) {
+                    console.error('Erro ao excluir pedido:', error);
+                    showError('Erro ao excluir pedido');
+                }
+            }
+        }
+
+        // Remove emojis e caracteres especiais para impressão térmica
+        function sanitizeText(text) {
+            if (!text) return "";
+
+            // Remove emojis
+            text = text.replace(
+                /([\u2700-\u27BF]|[\uE000-\uF8FF]|[\uD83C-\uDBFF\uDC00-\uDFFF])+/g,
+                ""
+            );
+
+            // Remove acentos
+            text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+            // Permite: letras/números (\w), espaço (\s), . , : / # @ ( ) - [ ]
+            text = text.replace(/[^\w\s.,:/#@()\-\[\]]/g, "");
+
+            return text.trim();
+        }
+
+        function generateThermalReceipt(order) {
+            if (!order) return;
+
+            document.getElementById("t-order-id").textContent = (order._id || "").toString().slice(-6);
+
+            let createdDate;
+            if (order.createdAt) {
+                if (order.createdAt.toDate) createdDate = order.createdAt.toDate();
+                else createdDate = new Date(order.createdAt);
+            } else {
+                createdDate = new Date();
+            }
+            const formattedDateTime = createdDate.toLocaleDateString('pt-BR', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+            }) + ' ' + createdDate.toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            document.getElementById("t-date").textContent = formattedDateTime;
+
+            document.getElementById("t-client").textContent = sanitizeText(order.clientName);
+            document.getElementById("t-phone").textContent = sanitizeText(order.phone);
+            document.getElementById("t-description").textContent = sanitizeText(order.description);
+
+            if (order.ringSize) {
+                document.getElementById("t-ring").style.display = "inline";
+                document.getElementById("t-ring-size").textContent = sanitizeText(order.ringSize);
+            } else {
+                document.getElementById("t-ring").style.display = "none";
             }
 
-            if (extraMessage.length > MAX_TEXT_LENGTH) {
-                extraMessage = extraMessage.substring(0, MAX_TEXT_LENGTH);
+            if (order.engraving) {
+                document.getElementById("t-engraving").style.display = "inline";
+                document.getElementById("t-engraving-text").textContent = sanitizeText(order.engraving);
+            } else {
+                document.getElementById("t-engraving").style.display = "none";
             }
 
-            const receiptHtml = buildReceiptHtmlForEmail(extraMessage);
+            const total = order.value || 0;
+            const down = order.downPayment || 0;
+            const pending = total - down;
 
-            const templateParams = {
-                to_email: recipientEmail,
-                subject: subject,
-                extra_message: extraMessage,
-                receipt_html: receiptHtml,
-                send_copy: sendCopy ? 'sim' : 'nao',
-            };
+            document.getElementById("t-value").textContent = numberToCurrency(total);
+            document.getElementById("t-down").textContent = numberToCurrency(down);
+            document.getElementById("t-pending").textContent = numberToCurrency(pending);
 
-            const sendBtn = document.getElementById('sendEmailBtn');
-            const sendText = document.getElementById('sendEmailText');
-            const sendLoading = document.getElementById('sendEmailLoading');
+            document.getElementById("t-delivery").textContent = formatDate(order.deliveryDate);
+            document.getElementById("t-user").textContent = sanitizeText(order.createdByName || "");
 
-            sendBtn.disabled = true;
-            if (sendText) sendText.style.display = 'none';
-            if (sendLoading) sendLoading.style.display = 'inline';
-
-            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
-
-            showNotification('Recibo enviado por e-mail com sucesso!');
-            closeEmailModal();
-        } catch (error) {
-            console.error('Erro ao enviar email:', error);
-            showError('Erro ao enviar o e-mail.');
-        } finally {
-            const sendBtn = document.getElementById('sendEmailBtn');
-            const sendText = document.getElementById('sendEmailText');
-            const sendLoading = document.getElementById('sendEmailLoading');
-            if (sendBtn) sendBtn.disabled = false;
-            if (sendText) sendText.style.display = 'inline';
-            if (sendLoading) sendLoading.style.display = 'none';
+            document.getElementById("t-footer").textContent = sanitizeText("Siga @jamppratas 💎");
         }
-    }
 
-    function formatDate(dateString) {
-        const date = new Date(dateString + 'T00:00:00');
-        return date.toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: 'long',
-            year: 'numeric'
-        });
-    }
+        function printThermalReceipt() {
+            if (!currentReceiptOrder) {
+                showError("Abra um recibo antes de imprimir na impressora térmica.");
+                return;
+            }
+            generateThermalReceipt(currentReceiptOrder);
 
-    function setupSearch() {
-        const searchInput = document.getElementById('searchInput');
-        searchInput.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            renderOrders(searchTerm);
-        });
-    }
+            const thermalDiv = document.getElementById("thermal-receipt");
+            if (!thermalDiv) {
+                showError("Modelo de recibo térmico não encontrado.");
+                return;
+            }
 
-    function showNotification(message) {
-        const notification = document.createElement('div');
-        notification.className = 'notification';
-        notification.textContent = message;
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
-    }
-
-    function showError(message) {
-        const notification = document.createElement('div');
-        notification.className = 'notification error';
-        notification.textContent = message;
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            setTimeout(() => notification.remove(), 300);
-        }, 4000);
-    }
-
-    function printReceipt() {
-        try {
-            requireAuth();
-        } catch {
-            return;
+            const printWindow = window.open("", "_blank", "width=400,height=600");
+            const html = `
+                <html>
+                <head>
+                    <title>Recibo Térmico - JAMP Pratas</title>
+                    <style>
+                        @page { margin: 2mm; }
+                        body {
+                            font-family: monospace;
+                            font-size: 12px;
+                            width: 58mm;
+                            max-width: 58mm;
+                            margin: 0;
+                            padding: 0;
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${thermalDiv.innerHTML}
+                    <script>
+                        window.onload = function() {
+                            window.print();
+                            window.onfocus = function() { window.close(); };
+                        };
+                    <\/script>
+                </body>
+                </html>
+            `;
+            printWindow.document.open();
+            printWindow.document.write(html);
+            printWindow.document.close();
         }
-        window.print();
-    }
-</script>
 
+        // Visualizar recibo A4
+        function viewReceipt(id) {
+            const order = orders.find(o => o.id === id);
+            if (!order) return;
+
+            currentReceiptOrder = { ...order, _id: id };
+
+            document.getElementById('receipt-order-number').textContent = id.toString().slice(-6);
+
+            let createdDate;
+            if (order.createdAt) {
+                if (order.createdAt.toDate) createdDate = order.createdAt.toDate();
+                else createdDate = new Date(order.createdAt);
+            } else {
+                createdDate = new Date();
+            }
+            const formattedDateTime = createdDate.toLocaleDateString('pt-BR', { 
+                day: '2-digit', 
+                month: 'long', 
+                year: 'numeric' 
+            }) + ' às ' + createdDate.toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            document.getElementById('receipt-datetime').textContent = formattedDateTime;
+
+            document.getElementById('receipt-client').textContent = order.clientName;
+            document.getElementById('receipt-phone').textContent = order.phone;
+            document.getElementById('receipt-description').textContent = order.description;
+
+            const ringRow = document.getElementById('receipt-ring-row');
+            if (order.ringSize) {
+                document.getElementById('receipt-ring').textContent = order.ringSize;
+                ringRow.style.display = 'flex';
+            } else {
+                ringRow.style.display = 'none';
+            }
+
+            const engravingRow = document.getElementById('receipt-engraving-row');
+            if (order.engraving) {
+                document.getElementById('receipt-engraving').textContent = order.engraving;
+                engravingRow.style.display = 'flex';
+            } else {
+                engravingRow.style.display = 'none';
+            }
+
+            document.getElementById('receipt-observations-content').textContent = 
+                order.observations || 'Nenhuma observação adicional.';
+
+            const paymentStatusText = order.paymentStatus === 'pago' ? 'PAGO' :
+                                     order.paymentStatus === '50%' ? '50% PAGO' : 'PENDENTE';
+            const paymentMethodText = order.paymentMethod || 'Não informado';
+            
+            document.getElementById('receipt-payment-method').textContent = `${paymentMethodText} - ${paymentStatusText}`;
+            document.getElementById('receipt-down-payment').textContent = order.downPayment > 0 ? 
+                `R$ ${numberToCurrency(order.downPayment)}` : 'R$ 0,00';
+            
+            const pendingValue = order.value - order.downPayment;
+            document.getElementById('receipt-pending').textContent = `R$ ${numberToCurrency(pendingValue)}`;
+
+            document.getElementById('receipt-total').textContent = `R$ ${numberToCurrency(order.value)}`;
+            document.getElementById('receipt-delivery-date').textContent = formatDate(order.deliveryDate);
+            document.getElementById('receipt-created-by-name').textContent = order.createdByName || 'N/A';
+
+            // já prepara o recibo térmico
+            generateThermalReceipt(currentReceiptOrder);
+
+            document.getElementById('receiptModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('receiptModal').classList.remove('active');
+        }
+
+        function openEmailModal() {
+            const receiptModal = document.getElementById('receiptModal');
+            if (!receiptModal.classList.contains('active')) {
+                showError('Abra um recibo antes de enviar por email.');
+                return;
+            }
+            document.getElementById('emailModal').classList.add('active');
+        }
+
+        function closeEmailModal() {
+            document.getElementById('emailModal').classList.remove('active');
+            const form = document.getElementById('emailForm');
+            if (form) form.reset();
+            const statusDiv = document.getElementById('emailStatus');
+            if (statusDiv) {
+                statusDiv.style.display = 'none';
+                statusDiv.innerHTML = '';
+            }
+        }
+
+        function buildReceiptHtmlForEmail(customMessage = '') {
+            const original = document.getElementById('receiptContent');
+            if (!original) return '';
+            const receiptNode = original.cloneNode(true);
+            const actions = receiptNode.querySelector('.modal-actions');
+            if (actions) actions.remove();
+
+            if (customMessage && customMessage.trim()) {
+                const msgDiv = document.createElement('div');
+                msgDiv.textContent = customMessage;
+                msgDiv.style.marginBottom = '20px';
+                msgDiv.style.padding = '10px';
+                msgDiv.style.border = '1px solid #eee';
+                msgDiv.style.background = '#fafafa';
+                receiptNode.insertBefore(msgDiv, receiptNode.firstChild);
+            }
+
+            const receiptHtml = receiptNode.innerHTML;
+
+            return `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <title>Recibo - JAMP Pratas</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    background: #ffffff;
+                    color: #1a1a1a;
+                    margin: 0;
+                    padding: 0;
+                }
+                .receipt-container {
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 16px;
+                }
+                .receipt-logo {
+                    background: #000000 !important;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="receipt-container">
+                ${receiptHtml}
+            </div>
+        </body>
+        </html>
+            `;
+        }
+
+        async function sendReceiptEmail(event) {
+            if (event && event.preventDefault) event.preventDefault();
+
+            try {
+                if (!window.emailjs) {
+                    throw new Error('EmailJS não está carregado.');
+                }
+
+                const recipientEmail = document.getElementById('recipientEmail').value.trim();
+                const subject = document.getElementById('emailSubject').value.trim();
+                const extraMessage = document.getElementById('emailMessage').value.trim();
+                const sendCopy = document.getElementById('sendCopy').checked;
+
+                if (!recipientEmail) {
+                    showError('Informe o e-mail do destinatário.');
+                    return;
+                }
+
+                const receiptHtml = buildReceiptHtmlForEmail(extraMessage);
+
+                const templateParams = {
+                    to_email: recipientEmail,
+                    subject: subject,
+                    extra_message: extraMessage,
+                    receipt_html: receiptHtml,
+                    send_copy: sendCopy ? 'sim' : 'nao',
+                };
+
+                await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+
+                showNotification('Recibo enviado por e-mail com sucesso!');
+                closeEmailModal();
+            } catch (error) {
+                console.error('Erro ao enviar email:', error);
+                showError('Erro ao enviar o e-mail.');
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString + 'T00:00:00');
+            return date.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric'
+            });
+        }
+
+        function setupSearch() {
+            const searchInput = document.getElementById('searchInput');
+            searchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                renderOrders(searchTerm);
+            });
+        }
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        function showError(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification error';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 4000);
+        }
+
+        function printReceipt() {
+            window.print();
+        }
+    </script>
 </body>
 </html>
+
