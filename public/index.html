@@ -2129,6 +2129,7 @@
             showError("Abra um recibo antes de imprimir na impressora térmica.");
             return;
         }
+        
         generateThermalReceipt(currentReceiptOrder);
 
         const thermalDiv = document.getElementById("thermal-receipt");
@@ -2137,34 +2138,87 @@
             return;
         }
 
-        const printWindow = window.open("", "_blank", "width=400,height=600");
+        const printWindow = window.open("", "_blank", "width=300,height=600");
+        
         const html = `
-            <html>
-            <head>
-                <title>Recibo Térmico - JAMP Pratas</title>
-                <style>
-                    @page { margin: 2mm; }
-                    body {
-                        font-family: monospace;
-                        font-size: 12px;
-                        width: 58mm;
-                        max-width: 58mm;
-                        margin: 0;
-                        padding: 0;
-                    }
-                </style>
-            </head>
-            <body>
-                ${thermalDiv.innerHTML}
-                <script>
-                    window.onload = function() {
-                        window.print();
-                        window.onfocus = function() { window.close(); };
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Recibo Térmico - JAMP Pratas</title>
+        <style>
+            @page {
+                size: 58mm auto;
+                margin: 0;
+            }
+            
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 11px;
+                line-height: 1.3;
+                width: 58mm;
+                max-width: 58mm;
+                margin: 0 auto;
+                padding: 2mm;
+                background: white;
+                color: black;
+            }
+            
+            #thermal-receipt,
+            #thermal-receipt * {
+                max-width: 54mm !important;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+            
+            @media print {
+                body {
+                    width: 58mm;
+                    max-width: 58mm;
+                    margin: 0;
+                    padding: 2mm;
+                }
+                
+                @page {
+                    size: 58mm auto;
+                    margin: 0;
+                }
+            }
+            
+            .thermal-center { text-align: center; }
+            .thermal-bold { font-weight: bold; }
+            .thermal-line { border-top: 1px dashed #000; margin: 2mm 0; }
+            .thermal-spacer { height: 3mm; }
+        </style>
+    </head>
+    <body>
+        <div id="thermal-receipt">
+            ${thermalDiv.innerHTML}
+        </div>
+        
+        <script>
+            window.onload = function() {
+                setTimeout(function() {
+                    window.print();
+                    window.onafterprint = function() {
+                        window.close();
                     };
-                <\/script>
-            </body>
-            </html>
+                    setTimeout(function() {
+                        window.close();
+                    }, 500);
+                }, 250);
+            };
+        <\/script>
+    </body>
+    </html>
         `;
+        
         printWindow.document.open();
         printWindow.document.write(html);
         printWindow.document.close();
